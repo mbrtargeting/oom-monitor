@@ -1,33 +1,42 @@
 extern crate chrono;
 
-use sysinfo::{ProcessExt, SystemExt};
+use sysinfo::{ProcessExt, SystemExt, Pid, Process};
 use std::{thread, time};
 use chrono::{DateTime, Utc};
 use std::process::Command;
 use std::str;
 use std::fmt;
+use std::collections::{HashMap, VecDeque};
+
+#[derive(Debug)]
+struct SystemState {
+    timestamp: DateTime<Utc>,
+    total_memory: u64,
+    used_memory: u64,
+    total_swap: u64,
+    used_swap: u64,
+    processes: HashMap<Pid, Process>,
+}
 
 fn main() {
-    println!("Hello, world!");
-
     let tenth_of_a_second = time::Duration::from_millis(100);
     let mut system = sysinfo::System::new();
+    let mut snapshots: VecDeque<SystemState> = VecDeque::new();
 
     loop {
-        // First we update all information of our system struct.
         system.refresh_all();
 
-        // Now let's print every process' id and name:
-        //for (pid, proc_) in system.get_process_list() {
-            //println!("PID:{}\n  Name:{}\n  CMD:{:#?} => status: {:?}", pid,     proc_.name(),proc_.cmd(), proc_.status());
-        //}
+        snapshots.truncate(50);
 
-        // And finally the RAM and SWAP information:
-        //println!("Time: {}", Utc::now());
-        //println!("  total memory: {} kB", system.get_total_memory());
-        //println!("  used memory : {} kB", system.get_used_memory());
-        //println!("  total swap  : {} kB", system.get_total_swap());
-        //println!("  used swap   : {} kB", system.get_used_swap());
+        let current_system_state = SystemState {
+            timestamp: Utc::now(),
+            total_memory: system.get_total_memory(),
+            used_memory: system.get_used_memory(),
+            total_swap: system.get_total_swap(),
+            used_swap: system.get_used_swap(),
+            processes: system.get_process_list().to_owned(),
+        };
+        snapshots.push_back(current_system_state);
 
         let last_snapshot_time = Utc::now();
 
@@ -47,11 +56,19 @@ fn main() {
                         Ok(unicode) => {
                             for line in unicode.lines() {
                                 if line.contains("killed") {
-                                    let is_new = dmesg_line_newer_than(line, &last_snapshot_time);
+                                    let is_new = dmesg_line_newer_than(line, &snapshots.back().unwrap().timestamp);
                                     match is_new {
                                         Err(e) => println!("{}", e),
                                         Ok(false) => continue,
-                                        Ok(true) => println!("{}", line)
+                                        Ok(true) => {
+                                            println!("OOM occurred: {}", line);
+                                            println!("Recorded system state: ");
+                                            println!("{:?}", snapshots.back().unwrap());
+                                            //for snapshot in snapshots {
+                                            //    println!("{:?}", snapshot);
+                                            //    println!("-----------------");
+                                            //}
+                                        }
                                     }
                                 }
                             }
