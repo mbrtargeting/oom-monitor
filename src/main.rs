@@ -1,7 +1,8 @@
+use sysinfo::{ProcessExt, SystemExt};
+use std::{thread, time};
+
 fn main() {
     println!("Hello, world!");
-    use sysinfo::{ProcessExt, SystemExt};
-    use std::{thread, time};
 
     let tenth_of_a_second = time::Duration::from_millis(100);
     let mut system = sysinfo::System::new();
@@ -16,6 +17,7 @@ fn main() {
         }
 
         // And finally the RAM and SWAP information:
+
         println!("total memory: {} kB", system.get_total_memory());
         println!("used memory : {} kB", system.get_used_memory());
         println!("total swap  : {} kB", system.get_total_swap());
