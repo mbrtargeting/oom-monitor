@@ -18,20 +18,22 @@ fn main() {
         system.refresh_all();
 
         // Now let's print every process' id and name:
-        for (pid, proc_) in system.get_process_list() {
-            println!("PID:{}\n  Name:{}\n  CMD:{:#?} => status: {:?}", pid,     proc_.name(),proc_.cmd(), proc_.status());
-        }
+        //for (pid, proc_) in system.get_process_list() {
+            //println!("PID:{}\n  Name:{}\n  CMD:{:#?} => status: {:?}", pid,     proc_.name(),proc_.cmd(), proc_.status());
+        //}
 
         // And finally the RAM and SWAP information:
-        println!("Time: {}", Utc::now());
-        println!("  total memory: {} kB", system.get_total_memory());
-        println!("  used memory : {} kB", system.get_used_memory());
-        println!("  total swap  : {} kB", system.get_total_swap());
-        println!("  used swap   : {} kB", system.get_used_swap());
+        //println!("Time: {}", Utc::now());
+        //println!("  total memory: {} kB", system.get_total_memory());
+        //println!("  used memory : {} kB", system.get_used_memory());
+        //println!("  total swap  : {} kB", system.get_total_swap());
+        //println!("  used swap   : {} kB", system.get_used_swap());
+
+        let last_snapshot_time = Utc::now();
 
         thread::sleep(tenth_of_a_second);
 
-        let maybe_output = Command::new("dmesg").arg("--human").arg("--time-format").arg("iso").arg("--decode").arg("--nopager").output();
+        let maybe_output = Command::new("dmesg").arg("--time-format").arg("iso").arg("--decode").arg("--nopager").output();
         //dmesg --human -T -x
         match maybe_output {
             Err(e) => println!("Could not read from dmesg: {}", e),
@@ -45,7 +47,12 @@ fn main() {
                         Ok(unicode) => {
                             for line in unicode.lines() {
                                 if line.contains("killed") {
-                                    println!("{}", line)
+                                    let is_new = dmesg_line_newer_than(line, &last_snapshot_time);
+                                    match is_new {
+                                        Err(e) => println!("{}", e),
+                                        Ok(false) => continue,
+                                        Ok(true) => println!("{}", line)
+                                    }
                                 }
                             }
                         },
@@ -63,4 +70,18 @@ fn to_utf8_or_raw(presumably_unicode: &Vec<u8>) -> String {
         Err(_e) => format!("Could not deserialize to unicode: {:?}", presumably_unicode),
         Ok(unicode) => unicode.to_string(),
     }
+}
+
+fn dmesg_line_newer_than(line: &str, point: &DateTime<Utc>) -> Result<bool, String> {
+    let words = line.split_ascii_whitespace();
+    for word in words {
+        let maybe_time = DateTime::parse_from_rfc3339(word);
+        match maybe_time {
+            Err(_e) => continue,
+            Ok(timestamp) => {
+                return Ok(timestamp > DateTime::from(*point))
+            },
+        }
+    }
+    Err(format!("Could not parse date from line: {}", line).to_string())
 }
