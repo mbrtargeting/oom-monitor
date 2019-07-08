@@ -40,12 +40,19 @@ fn main() {
                     let stderr = to_utf8_or_raw(&output.stderr);
                     println!("dmesg failed with error: {}", stderr);
                 } else {
-                    let stdout = to_utf8_or_raw(&output.stdout);
-                    println!("Read from dmesg: {}", stdout);
+                    match str::from_utf8(&output.stdout) {
+                        Err(_e) => println!("Could not deserialize to unicode: {:?}", output.stdout),
+                        Ok(unicode) => {
+                            for line in unicode.lines() {
+                                if line.contains("killed") {
+                                    println!("{}", line)
+                                }
+                            }
+                        },
+                    }
                 }
             },
         }
-
     }
 
     
