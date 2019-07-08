@@ -29,15 +29,15 @@ fn main() {
 
         thread::sleep(tenth_of_a_second);
 
-        let maybe_output = Command::new("dmesg").arg("--human").arg("--time-format iso").arg("--decode").arg("--nopager").output();
+        let maybe_output = Command::new("dmesg").arg("--human").arg("--time-format").arg("iso").arg("--decode").arg("--nopager").output();
         //dmesg --human -T -x
         match maybe_output {
             Err(e) => println!("Could not read from dmesg: {}", e),
             Ok(output) => {
                 if !output.status.success() {
-                    println!("dmesg failed with error: {:?}", output.stderr)
+                    println!("dmesg failed with output: {:?}", output)
                 } else {
-                    println!("Read from dmesg: {:?}", output.stdout)
+                    println!("Read from dmesg: {:?}", output)
                 }
             },
         }
