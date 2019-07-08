@@ -4,6 +4,8 @@ use sysinfo::{ProcessExt, SystemExt};
 use std::{thread, time};
 use chrono::{DateTime, Utc};
 use std::process::Command;
+use std::str;
+use std::fmt;
 
 fn main() {
     println!("Hello, world!");
@@ -35,13 +37,23 @@ fn main() {
             Err(e) => println!("Could not read from dmesg: {}", e),
             Ok(output) => {
                 if !output.status.success() {
-                    println!("dmesg failed with output: {:?}", output)
+                    let stderr = to_utf8_or_raw(&output.stderr);
+                    println!("dmesg failed with error: {}", stderr);
                 } else {
-                    println!("Read from dmesg: {:?}", output)
+                    let stdout = to_utf8_or_raw(&output.stdout);
+                    println!("Read from dmesg: {}", stdout);
                 }
             },
         }
+
     }
 
     
+}
+
+fn to_utf8_or_raw(presumably_unicode: &Vec<u8>) -> String {
+    match str::from_utf8(presumably_unicode) {
+        Err(_e) => format!("Could not deserialize to unicode: {:?}", presumably_unicode),
+        Ok(unicode) => unicode.to_string(),
+    }
 }
