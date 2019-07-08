@@ -1,5 +1,8 @@
+extern crate chrono;
+
 use sysinfo::{ProcessExt, SystemExt};
 use std::{thread, time};
+use chrono::{DateTime, Utc};
 
 fn main() {
     println!("Hello, world!");
@@ -17,11 +20,11 @@ fn main() {
         }
 
         // And finally the RAM and SWAP information:
-
-        println!("total memory: {} kB", system.get_total_memory());
-        println!("used memory : {} kB", system.get_used_memory());
-        println!("total swap  : {} kB", system.get_total_swap());
-        println!("used swap   : {} kB", system.get_used_swap());
+        println!("Time: {}", Utc::now());
+        println!("  total memory: {} kB", system.get_total_memory());
+        println!("  used memory : {} kB", system.get_used_memory());
+        println!("  total swap  : {} kB", system.get_total_swap());
+        println!("  used swap   : {} kB", system.get_used_swap());
 
         thread::sleep(tenth_of_a_second);
     }
