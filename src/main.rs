@@ -36,7 +36,7 @@ fn main() {
             used_swap: system.get_used_swap(),
             processes: system.get_process_list().to_owned(),
         };
-        snapshots.push_back(current_system_state);
+        snapshots.push_front(current_system_state);
 
         let last_snapshot_time = Utc::now();
 
@@ -63,7 +63,7 @@ fn main() {
                                         Ok(true) => {
                                             println!("OOM occurred: {}", line);
                                             println!("Recorded system state: ");
-                                            println!("{:?}", snapshots.back().unwrap());
+                                            println!("{:?}", snapshots.front().unwrap());
                                             //for snapshot in snapshots {
                                             //    println!("{:?}", snapshot);
                                             //    println!("-----------------");
