@@ -8,7 +8,7 @@ use std::str;
 use std::fmt;
 use std::collections::{HashMap, VecDeque};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct SystemState {
     timestamp: DateTime<Utc>,
     total_memory: u64,
@@ -61,13 +61,11 @@ fn main() {
                                         Err(e) => println!("{}", e),
                                         Ok(false) => continue,
                                         Ok(true) => {
-                                            println!("OOM occurred: {}", line);
-                                            println!("Recorded system state: ");
-                                            println!("{:?}", snapshots.front().unwrap());
-                                            //for snapshot in snapshots {
-                                            //    println!("{:?}", snapshot);
-                                            //    println!("-----------------");
-                                            //}
+                                            let snapshots_to_print = snapshots.clone();
+                                            for snapshot in snapshots_to_print {
+                                                println!("{:?}", snapshot);
+                                                println!("-----------------");
+                                            }
                                         }
                                     }
                                 }
