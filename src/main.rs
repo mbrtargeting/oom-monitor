@@ -19,14 +19,14 @@ struct SystemState {
 }
 
 fn main() {
-    let tenth_of_a_second = time::Duration::from_millis(100);
+    let a_second = time::Duration::from_millis(1000);
     let mut system = sysinfo::System::new();
     let mut snapshots: VecDeque<SystemState> = VecDeque::new();
 
     loop {
         system.refresh_all();
 
-        snapshots.truncate(50);
+        snapshots.truncate(20);
 
         let current_system_state = SystemState {
             timestamp: Utc::now(),
@@ -40,7 +40,7 @@ fn main() {
 
         let last_snapshot_time = Utc::now();
 
-        thread::sleep(tenth_of_a_second);
+        thread::sleep(a_second);
 
         let maybe_output = Command::new("dmesg").arg("--time-format").arg("iso").arg("--decode").arg("--nopager").output();
         //dmesg --human -T -x
