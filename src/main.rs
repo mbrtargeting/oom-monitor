@@ -1,11 +1,10 @@
 extern crate chrono;
 
-use sysinfo::{ProcessExt, SystemExt, Pid, Process};
+use sysinfo::{SystemExt, Pid, Process};
 use std::{thread, time};
 use chrono::{DateTime, Utc};
 use std::process::Command;
 use std::str;
-use std::fmt;
 use std::collections::{HashMap, VecDeque};
 
 #[derive(Debug, Clone)]
@@ -37,8 +36,6 @@ fn main() {
             processes: system.get_process_list().to_owned(),
         };
         snapshots.push_front(current_system_state);
-
-        let last_snapshot_time = Utc::now();
 
         thread::sleep(a_second);
 
