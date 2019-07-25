@@ -66,6 +66,7 @@ fn main() {
                                                 println!("{:?}", snapshot);
                                                 println!("-----------------");
                                             }
+                                            println!("\n#\n#\n#\n#\n#\n#\n#\n#\n#\n#\n#\n#");
                                         }
                                     }
                                 }
