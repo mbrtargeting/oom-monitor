@@ -55,7 +55,7 @@ fn main() {
                         Err(_e) => println!("Could not deserialize to unicode: {:?}", output.stdout),
                         Ok(unicode) => {
                             for line in unicode.lines() {
-                                if line.contains("killed") {
+                                if line.contains("Killed process") {
                                     let is_new = dmesg_line_newer_than(line, &snapshots.back().unwrap().timestamp);
                                     match is_new {
                                         Err(e) => println!("{}", e),
