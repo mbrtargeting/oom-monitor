@@ -7,7 +7,7 @@ use std::process::Command;
 use std::str;
 use std::collections::{HashMap, VecDeque};
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 struct SystemState {
     timestamp: DateTime<Utc>,
     total_memory: u64,
@@ -58,8 +58,7 @@ fn main() {
                                         Err(e) => println!("{}", e),
                                         Ok(false) => continue,
                                         Ok(true) => {
-                                            let snapshots_to_print = snapshots.clone();
-                                            for snapshot in snapshots_to_print {
+                                            for snapshot in &snapshots {
                                                 println!("{:?}", snapshot);
                                                 println!("-----------------");
                                             }
