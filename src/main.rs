@@ -1,4 +1,5 @@
 extern crate chrono;
+extern crate regex;
 
 use sysinfo::{SystemExt, Pid, Process};
 use std::{thread, time};
@@ -6,6 +7,7 @@ use chrono::{DateTime, Utc};
 use std::process::Command;
 use std::str;
 use std::collections::{HashMap, VecDeque};
+use regex::Regex;
 
 #[derive(Debug)]
 struct SystemState {
@@ -53,11 +55,26 @@ fn main() {
                         Ok(unicode) => {
                             for line in unicode.lines() {
                                 if line.contains("Killed process") {
+                                    let re = Regex::new(r"Killed process (\d*)").expect("Could not compile regex. Programmer error. Exiting.");
+                                    let killed_process_id = re.captures(line).expect(&format!("No captures in line \"{}\". Programmer error. Exiting.", line))
+                                        .get(1).expect("Could not match PID. Programmer error. Exiting.")
+                                        .as_str().parse::<i32>().expect("Process ID could not be mapped to int. Programmer error. Exiting.");
                                     let is_new = dmesg_line_newer_than(line, &snapshots.back().unwrap().timestamp);
                                     match is_new {
                                         Err(e) => println!("{}", e),
                                         Ok(false) => continue,
                                         Ok(true) => {
+                                            let maybe_last_snapshot = snapshots.front();
+                                            match maybe_last_snapshot {
+                                                None => println!("No snapshot in queue. That's not supposed to happen."),
+                                                Some(state) => {
+                                                    let maybe_killed_process = state.processes.get(&killed_process_id);
+                                                    match maybe_killed_process {
+                                                        None => println!("Could not find the killed process in last system snapshot. Probably it all happened too fast"),
+                                                        Some(killed_process) => println!("The following process was killed: {:?}", killed_process)
+                                                    }
+                                                }
+                                            }
                                             for snapshot in &snapshots {
                                                 println!("{:?}", snapshot);
                                                 println!("-----------------");
