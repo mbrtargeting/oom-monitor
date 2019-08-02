@@ -25,7 +25,7 @@ fn main() {
     loop {
         system.refresh_all();
 
-        snapshots.truncate(20);
+        snapshots.truncate(10);
 
         let current_system_state = SystemState {
             timestamp: Utc::now(),
