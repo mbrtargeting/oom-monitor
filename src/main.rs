@@ -23,6 +23,13 @@ fn main() {
     let a_second = time::Duration::from_millis(1000);
     let mut system = sysinfo::System::new();
     let mut snapshots: VecDeque<SystemState> = VecDeque::new();
+    let mut already_seen_ooms:HashMap<String, ()> = HashMap::new();
+    let mut now_seen_ooms:HashMap<String, ()>;
+
+    let output = get_dmesg_kill_lines().expect("Exiting! Could not fill hashmap with already seen OOMs");
+    for line in output.lines() {
+        already_seen_ooms.insert(line.to_owned(), ());
+    }
 
     loop {
         system.refresh_all();
@@ -46,35 +53,34 @@ fn main() {
         match maybe_kill_lines {
             Err(e) => println!("Problems with dmesg: {}", e),
             Ok(kill_lines) => {
+                now_seen_ooms = HashMap::new();
                 for line in kill_lines.lines() {
                     let re = Regex::new(r"Killed process (\d*)").expect("Could not compile regex. Programmer error. Exiting.");
                     let killed_process_id = re.captures(line).expect(&format!("No captures in line \"{}\". Programmer error. Exiting.", line))
                         .get(1).expect("Could not match PID. Programmer error. Exiting.")
                         .as_str().parse::<i32>().expect("Process ID could not be mapped to int. Programmer error. Exiting.");
-                    let is_new = dmesg_line_newer_than(line, &snapshots.back().unwrap().timestamp);
-                    match is_new {
-                        Err(e) => println!("{}", e),
-                        Ok(false) => continue,
-                        Ok(true) => {
-                            let maybe_last_snapshot = snapshots.front();
-                            match maybe_last_snapshot {
-                                None => println!("No snapshot in queue. That's not supposed to happen."),
-                                Some(state) => {
-                                    let maybe_killed_process = state.processes.get(&killed_process_id);
-                                    match maybe_killed_process {
-                                        None => println!("Could not find the killed process in last system snapshot. Probably it all happened too fast"),
-                                        Some(killed_process) => println!("The following process was killed: {:?}", killed_process)
-                                    }
+                    let is_new = !already_seen_ooms.contains_key(line);
+                    now_seen_ooms.insert(line.to_owned(), ());
+                    if is_new {
+                        let maybe_last_snapshot = snapshots.front();
+                        match maybe_last_snapshot {
+                            None => println!("No snapshot in queue. That's not supposed to happen."),
+                            Some(state) => {
+                                let maybe_killed_process = state.processes.get(&killed_process_id);
+                                match maybe_killed_process {
+                                    None => println!("Could not find the killed process in last system snapshot. Probably it all happened too fast"),
+                                    Some(killed_process) => println!("The following process was killed: {:?}", killed_process)
                                 }
                             }
-                            for snapshot in &snapshots {
-                                println!("{:?}", snapshot);
-                                println!("-----------------");
-                            }
-                            println!("\n#\n#\n#\n#\n#\n#\n#\n#\n#\n#\n#\n#");
                         }
+                        for snapshot in &snapshots {
+                            println!("{:?}", snapshot);
+                            println!("-----------------");
+                        }
+                        println!("\n#\n#\n#\n#\n#\n#\n#\n#\n#\n#\n#\n#");
                     }
                 }
+                already_seen_ooms = now_seen_ooms;
             },
         }
     }
@@ -87,20 +93,6 @@ fn to_utf8_or_raw(presumably_unicode: &Vec<u8>) -> String {
         Err(_e) => format!("Could not deserialize to unicode: {:?}", presumably_unicode),
         Ok(unicode) => unicode.to_string(),
     }
-}
-
-fn dmesg_line_newer_than(line: &str, point: &DateTime<Utc>) -> Result<bool, String> {
-    let words = line.split_ascii_whitespace();
-    for word in words {
-        let maybe_time = DateTime::parse_from_str(word, "%Y-%m-%dT%H:%M:%S,%6f%z");
-        match maybe_time {
-            Err(_e) => continue,
-            Ok(timestamp) => {
-                return Ok(timestamp > DateTime::from(*point))
-            },
-        }
-    }
-    Err(format!("Could not parse date from line: {}", line).to_string())
 }
 
 fn get_dmesg_kill_lines() -> std::result::Result<String, String> {
