@@ -55,10 +55,6 @@ fn main() {
             Ok(kill_lines) => {
                 now_seen_ooms = HashMap::new();
                 for line in kill_lines.lines() {
-                    let re = Regex::new(r"Killed process (\d*)").expect("Could not compile regex. Programmer error. Exiting.");
-                    let killed_process_id = re.captures(line).expect(&format!("No captures in line \"{}\". Programmer error. Exiting.", line))
-                        .get(1).expect("Could not match PID. Programmer error. Exiting.")
-                        .as_str().parse::<i32>().expect("Process ID could not be mapped to int. Programmer error. Exiting.");
                     let is_new = !already_seen_ooms.contains_key(line);
                     now_seen_ooms.insert(line.to_owned(), ());
                     if is_new {
@@ -66,6 +62,10 @@ fn main() {
                         match maybe_last_snapshot {
                             None => println!("No snapshot in queue. That's not supposed to happen."),
                             Some(state) => {
+                                let re = Regex::new(r"Killed process (\d*)").expect("Could not compile regex. Programmer error. Exiting.");
+                                let killed_process_id = re.captures(line).expect(&format!("No captures in line \"{}\". Programmer error. Exiting.", line))
+                                    .get(1).expect("Could not match PID. Programmer error. Exiting.")
+                                    .as_str().parse::<i32>().expect("Process ID could not be mapped to int. Programmer error. Exiting.");
                                 let maybe_killed_process = state.processes.get(&killed_process_id);
                                 match maybe_killed_process {
                                     None => println!("Could not find the killed process in last system snapshot. Probably it all happened too fast"),
