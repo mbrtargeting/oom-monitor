@@ -41,50 +41,40 @@ fn main() {
 
         thread::sleep(a_second);
 
-        let maybe_output = Command::new("dmesg").arg("--time-format").arg("iso").arg("--decode").arg("--nopager").output();
+        let maybe_output = get_dmesg_output();
         //dmesg --human -T -x
         match maybe_output {
-            Err(e) => println!("Could not read from dmesg: {}", e),
+            Err(e) => println!("Problems with dmesg: {}", e),
             Ok(output) => {
-                if !output.status.success() {
-                    let stderr = to_utf8_or_raw(&output.stderr);
-                    println!("dmesg failed with error: {}", stderr);
-                } else {
-                    match str::from_utf8(&output.stdout) {
-                        Err(_e) => println!("Could not deserialize to unicode: {:?}", output.stdout),
-                        Ok(unicode) => {
-                            for line in unicode.lines() {
-                                if line.contains("Killed process") {
-                                    let re = Regex::new(r"Killed process (\d*)").expect("Could not compile regex. Programmer error. Exiting.");
-                                    let killed_process_id = re.captures(line).expect(&format!("No captures in line \"{}\". Programmer error. Exiting.", line))
-                                        .get(1).expect("Could not match PID. Programmer error. Exiting.")
-                                        .as_str().parse::<i32>().expect("Process ID could not be mapped to int. Programmer error. Exiting.");
-                                    let is_new = dmesg_line_newer_than(line, &snapshots.back().unwrap().timestamp);
-                                    match is_new {
-                                        Err(e) => println!("{}", e),
-                                        Ok(false) => continue,
-                                        Ok(true) => {
-                                            let maybe_last_snapshot = snapshots.front();
-                                            match maybe_last_snapshot {
-                                                None => println!("No snapshot in queue. That's not supposed to happen."),
-                                                Some(state) => {
-                                                    let maybe_killed_process = state.processes.get(&killed_process_id);
-                                                    match maybe_killed_process {
-                                                        None => println!("Could not find the killed process in last system snapshot. Probably it all happened too fast"),
-                                                        Some(killed_process) => println!("The following process was killed: {:?}", killed_process)
-                                                    }
-                                                }
-                                            }
-                                            for snapshot in &snapshots {
-                                                println!("{:?}", snapshot);
-                                                println!("-----------------");
-                                            }
-                                            println!("\n#\n#\n#\n#\n#\n#\n#\n#\n#\n#\n#\n#");
+                for line in output.lines() {
+                    if line.contains("Killed process") {
+                        let re = Regex::new(r"Killed process (\d*)").expect("Could not compile regex. Programmer error. Exiting.");
+                        let killed_process_id = re.captures(line).expect(&format!("No captures in line \"{}\". Programmer error. Exiting.", line))
+                            .get(1).expect("Could not match PID. Programmer error. Exiting.")
+                            .as_str().parse::<i32>().expect("Process ID could not be mapped to int. Programmer error. Exiting.");
+                        let is_new = dmesg_line_newer_than(line, &snapshots.back().unwrap().timestamp);
+                        match is_new {
+                            Err(e) => println!("{}", e),
+                            Ok(false) => continue,
+                            Ok(true) => {
+                                let maybe_last_snapshot = snapshots.front();
+                                match maybe_last_snapshot {
+                                    None => println!("No snapshot in queue. That's not supposed to happen."),
+                                    Some(state) => {
+                                        let maybe_killed_process = state.processes.get(&killed_process_id);
+                                        match maybe_killed_process {
+                                            None => println!("Could not find the killed process in last system snapshot. Probably it all happened too fast"),
+                                            Some(killed_process) => println!("The following process was killed: {:?}", killed_process)
                                         }
                                     }
                                 }
+                                for snapshot in &snapshots {
+                                    println!("{:?}", snapshot);
+                                    println!("-----------------");
+                                }
+                                println!("\n#\n#\n#\n#\n#\n#\n#\n#\n#\n#\n#\n#");
                             }
-                        },
+                        }
                     }
                 }
             },
@@ -113,4 +103,22 @@ fn dmesg_line_newer_than(line: &str, point: &DateTime<Utc>) -> Result<bool, Stri
         }
     }
     Err(format!("Could not parse date from line: {}", line).to_string())
+}
+
+fn get_dmesg_output() -> std::result::Result<String, String> {
+    let maybe_output = Command::new("dmesg").arg("--time-format").arg("iso").arg("--decode").arg("--nopager").output();
+    match maybe_output {
+        Err(e) => Err(format!("Could not read from dmesg: {}", e)),
+        Ok(output) => {
+            if !output.status.success() {
+                let stderr = to_utf8_or_raw(&output.stderr);
+                Err(format!("dmesg failed with error: {}", stderr))
+            } else {
+                match str::from_utf8(&output.stdout) {
+                    Err(_e) => Err(format!("Could not deserialize to unicode: {:?}", output.stdout)),
+                    Ok(unicode) => Ok(unicode.to_owned())
+                }
+            }
+        }
+    }
 }
