@@ -104,7 +104,7 @@ fn to_utf8_or_raw(presumably_unicode: &Vec<u8>) -> String {
 fn dmesg_line_newer_than(line: &str, point: &DateTime<Utc>) -> Result<bool, String> {
     let words = line.split_ascii_whitespace();
     for word in words {
-        let maybe_time = DateTime::parse_from_rfc3339(word);
+        let maybe_time = DateTime::parse_from_str(word, "%Y-%m-%dT%H:%M:%S,%6f%z");
         match maybe_time {
             Err(_e) => continue,
             Ok(timestamp) => {
