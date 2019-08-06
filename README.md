@@ -6,7 +6,9 @@ Monitors the state of a system and prints system state if there is an OOM
 
 (tested on Ubuntu 18.04 system)
 
-First of all, compile and start the oom-monitor: `cargo run`
+First of all, compile and start the oom-monitor: `cargo run`.
+
+[If you don't have the toolchain yet, you can get it here: <https://rustup.rs/>]
 
 You can trigger a sweep by the OOM killer by running the following as root:
 
