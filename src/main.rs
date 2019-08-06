@@ -49,7 +49,6 @@ fn main() {
         thread::sleep(a_second);
 
         let maybe_kill_lines = get_dmesg_kill_lines();
-        //dmesg --human -T -x
         match maybe_kill_lines {
             Err(e) => println!("Problems with dmesg: {}", e),
             Ok(kill_lines) => {
