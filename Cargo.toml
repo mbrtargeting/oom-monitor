@@ -10,6 +10,3 @@ edition = "2018"
 sysinfo = "*"
 chrono = "*"
 regex = "*"
-
-[build]
-target = "x86_64-unknown-linux-musl"
