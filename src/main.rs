@@ -1,7 +1,7 @@
 extern crate chrono;
 extern crate regex;
 
-use sysinfo::{SystemExt, Pid, Process};
+use sysinfo::{SystemExt, Pid, Process, ProcessExt};
 use std::{thread, time};
 use chrono::{DateTime, Utc};
 use std::process::Command;
@@ -57,24 +57,30 @@ fn main() {
                     let is_new = !already_seen_ooms.contains_key(line);
                     now_seen_ooms.insert(line.to_owned(), ());
                     if is_new {
-                        let maybe_last_snapshot = snapshots.front();
+                        println!("Observed OOM kill. The time is {}", Utc::now().to_rfc3339());
+                        let re = Regex::new(r"Killed process (\d*)").expect("Could not compile regex. Programmer error. Exiting.");
+                        let killed_process_id = re.captures(line).expect(&format!("No captures in line \"{}\". Programmer error. Exiting.", line))
+                            .get(1).expect("Could not match PID. Programmer error. Exiting.")
+                            .as_str().parse::<i32>().expect("Process ID could not be mapped to int. Programmer error. Exiting.");
+                        let maybe_last_snapshot = get_snapshot_with_killed_process(&snapshots, killed_process_id);
                         match maybe_last_snapshot {
-                            None => println!("No snapshot in queue. That's not supposed to happen."),
-                            Some(state) => {
-                                let re = Regex::new(r"Killed process (\d*)").expect("Could not compile regex. Programmer error. Exiting.");
-                                let killed_process_id = re.captures(line).expect(&format!("No captures in line \"{}\". Programmer error. Exiting.", line))
-                                    .get(1).expect("Could not match PID. Programmer error. Exiting.")
-                                    .as_str().parse::<i32>().expect("Process ID could not be mapped to int. Programmer error. Exiting.");
-                                let maybe_killed_process = state.processes.get(&killed_process_id);
+                            None => println!("No snapshot with killed process in queue. That's not supposed to happen."),
+                            Some(snapshot) => {
+                                println!("Found snapshot of system state with killed process. Snapshot taken at {}", snapshot.timestamp.to_rfc3339());
+                                println!("Memory: Used {} out of {}", snapshot.used_memory, snapshot.total_memory);
+                                println!("Swap: Used {} out of {}", snapshot.used_swap, snapshot.total_swap);
+                                let maybe_killed_process = snapshot.processes.get(&killed_process_id);
                                 match maybe_killed_process {
-                                    None => println!("Could not find the killed process in last system snapshot. Probably it all happened too fast"),
+                                    None => println!("get_snapshot_with_killed_process malfunctioned. Should never happen"),
                                     Some(killed_process) => println!("The following process was killed: {:?}", killed_process)
                                 }
+                                let mut processes:Vec<Process> = snapshot.processes.iter().map(|(_, process)| process.clone()).collect();
+                                processes.sort_by_key(|process| process.memory());
+                                println!("Processes, sorted by memory usage:");
+                                for process in processes {
+                                    println!("PID: {}\tName: {}\t Memory:{}\t CMD: {:?}", process.pid(), process.name(), process.memory(), process.cmd());
+                                }
                             }
-                        }
-                        for snapshot in &snapshots {
-                            println!("{:?}", snapshot);
-                            println!("-----------------");
                         }
                         println!("\n#\n#\n#\n#\n#\n#\n#\n#\n#\n#\n#\n#");
                     }
@@ -85,6 +91,15 @@ fn main() {
     }
 
     
+}
+
+fn get_snapshot_with_killed_process(snapshots: &VecDeque<SystemState>, killed_process_id: i32) -> Option<&SystemState> {
+    for snapshot in snapshots {
+        if snapshot.processes.contains_key(&killed_process_id) {
+            return Some(&snapshot)
+        }
+    }
+    None
 }
 
 fn to_utf8_or_raw(presumably_unicode: &Vec<u8>) -> String {
