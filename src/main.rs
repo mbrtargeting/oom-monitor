@@ -1,3 +1,7 @@
+/*
+ * Copyright 2019 Ströer SSP GmbH. All Rights Reserved.
+ */
+
 extern crate chrono;
 extern crate regex;
 
