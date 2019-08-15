@@ -31,7 +31,7 @@ fn main() {
     let mut now_seen_ooms:HashMap<String, ()>;
 
     let output = get_dmesg_kill_lines().expect("Exiting! Could not fill hashmap with already seen OOMs");
-    for line in output.lines() {
+    for line in output {
         already_seen_ooms.insert(line.to_owned(), ());
     }
 
@@ -57,13 +57,13 @@ fn main() {
             Err(e) => println!("Problems with dmesg: {}", e),
             Ok(kill_lines) => {
                 now_seen_ooms = HashMap::new();
-                for line in kill_lines.lines() {
-                    let is_new = !already_seen_ooms.contains_key(line);
+                for line in kill_lines {
+                    let is_new = !already_seen_ooms.contains_key(&line);
                     now_seen_ooms.insert(line.to_owned(), ());
                     if is_new {
-                        println!("Observed OOM kill. The time is {} UTC. The dmesg line looks like this: {}", Utc::now().to_rfc3339(), line);
+                        println!("Observed OOM kill. The time is {} UTC. The dmesg line looks like this: \"{}\"", Utc::now().to_rfc3339(), line);
                         let re = Regex::new(r"Killed process (\d*)").expect("Could not compile regex. Programmer error. Exiting.");
-                        let killed_process_id = re.captures(line).expect(&format!("No captures in line \"{}\". Programmer error. Exiting.", line))
+                        let killed_process_id = re.captures(&line).expect(&format!("No captures in line \"{}\". Programmer error. Exiting.", line))
                             .get(1).expect("Could not match PID. Programmer error. Exiting.")
                             .as_str().parse::<i32>().expect("Process ID could not be mapped to int. Programmer error. Exiting.");
                         let maybe_last_snapshot = get_snapshot_with_killed_process(&snapshots, killed_process_id);
@@ -115,7 +115,7 @@ fn to_utf8_or_raw(presumably_unicode: &Vec<u8>) -> String {
     }
 }
 
-fn get_dmesg_kill_lines() -> std::result::Result<String, String> {
+fn get_dmesg_kill_lines() -> std::result::Result<Vec<String>, String> {
     let maybe_output = Command::new("dmesg").arg("--time-format").arg("iso").arg("--decode").arg("--nopager").output();
     match maybe_output {
         Err(e) => Err(format!("Could not read from dmesg: {}", e)),
@@ -127,7 +127,7 @@ fn get_dmesg_kill_lines() -> std::result::Result<String, String> {
                 match str::from_utf8(&output.stdout) {
                     Err(_e) => Err(format!("Could not deserialize to unicode: {:?}", output.stdout)),
                     Ok(unicode) => {
-                        Ok(unicode.lines().filter(|line| line.contains("Killed process")).collect())
+                        Ok(unicode.lines().filter(|line| line.contains("Killed process")).map(|x| x.to_owned()).collect())
                     }
                 }
             }
