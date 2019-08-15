@@ -71,18 +71,19 @@ fn main() {
                             None => println!("No snapshot with killed process in queue. That's not supposed to happen."),
                             Some(snapshot) => {
                                 println!("Found snapshot of system state with killed process. Snapshot taken at {}", snapshot.timestamp.to_rfc3339());
-                                println!("Memory: Used {} out of {}", snapshot.used_memory, snapshot.total_memory);
-                                println!("Swap: Used {} out of {}", snapshot.used_swap, snapshot.total_swap);
+                                println!("Memory: Used {} out of {}, or {}%", snapshot.used_memory, snapshot.total_memory, memory_percentage(snapshot.used_memory, snapshot.total_memory));
+                                println!("Swap: Used {} out of {}, or {}%", snapshot.used_swap, snapshot.total_swap, memory_percentage(snapshot.used_swap, snapshot.total_swap));
                                 let maybe_killed_process = snapshot.processes.get(&killed_process_id);
                                 match maybe_killed_process {
                                     None => println!("get_snapshot_with_killed_process malfunctioned. Should never happen"),
-                                    Some(killed_process) => println!("The following process was killed: {:?}", killed_process)
+                                    Some(killed_process) => println!("The following process was killed: {}", process_to_long_string(killed_process, &snapshot))
                                 }
                                 let mut processes:Vec<Process> = snapshot.processes.iter().map(|(_, process)| process.clone()).collect();
                                 processes.sort_by_key(|process| process.memory());
                                 println!("Processes, sorted by memory usage:");
                                 for process in processes {
-                                    println!("PID: {}\tName: {}\t Memory:{}\t CMD: {:?}", process.pid(), process.name(), process.memory(), process.cmd());
+                                    println!("PID: {:7}\t Name: {:30}\t Parent: {:7?}\t Memory: {:9}kB or {:9}%\t Processor: {:9}%\t CMD: {:?}",
+                                    process.pid(), process.name(), parent_to_string(process.parent()), process.memory(), memory_percentage(process.memory(), snapshot.total_memory), process.cpu_usage(), process.cmd());
                                 }
                             }
                         }
@@ -130,5 +131,40 @@ fn get_dmesg_kill_lines() -> std::result::Result<String, String> {
                 }
             }
         }
+    }
+}
+
+fn process_to_long_string(process: &Process, snapshot: &SystemState) -> String {
+    format!("PID: {}
+    Name: {}
+    Memory: {}kB or {}%
+    CPU: {}%
+    Parent: {:?}
+    CMD: {:?}
+    Environment: {}
+    Status: {}
+    Start time: {}s", process.pid(), process.name(), process.memory(),
+    memory_percentage(process.memory(), snapshot.total_memory),
+    process.cpu_usage(), parent_to_string(process.parent()), process.cmd(),
+    stringlist_to_string(process.environ()), process.status(),
+    process.start_time()).to_owned()
+}
+
+fn stringlist_to_string(list: &[String]) -> String {
+    let mut accumulator = "[".to_owned() + list.first().unwrap_or(&"".to_owned());
+    for i in 1..list.len() {
+        accumulator = accumulator + ", " + &list[i];
+    }
+    accumulator + "]"
+}
+
+fn memory_percentage(used: u64, total: u64) -> f32 {
+    (100.0 * used as f64 / total as f64) as f32
+}
+
+fn parent_to_string(parent: Option<i32>) -> String {
+    match parent {
+        Some(pid) => pid.to_string(),
+        None => "None".to_owned()
     }
 }
