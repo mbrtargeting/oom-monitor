@@ -61,14 +61,21 @@ fn main() {
                     let is_new = !already_seen_ooms.contains_key(line);
                     now_seen_ooms.insert(line.to_owned(), ());
                     if is_new {
-                        println!("Observed OOM kill. The time is {}", Utc::now().to_rfc3339());
+                        println!("Observed OOM kill. The time is {} UTC. The dmesg line looks like this: {}", Utc::now().to_rfc3339(), line);
                         let re = Regex::new(r"Killed process (\d*)").expect("Could not compile regex. Programmer error. Exiting.");
                         let killed_process_id = re.captures(line).expect(&format!("No captures in line \"{}\". Programmer error. Exiting.", line))
                             .get(1).expect("Could not match PID. Programmer error. Exiting.")
                             .as_str().parse::<i32>().expect("Process ID could not be mapped to int. Programmer error. Exiting.");
                         let maybe_last_snapshot = get_snapshot_with_killed_process(&snapshots, killed_process_id);
                         match maybe_last_snapshot {
-                            None => println!("No snapshot with killed process in queue. That's not supposed to happen."),
+                            None => {
+                                println!("No snapshot with killed process in queue. \
+                                That's not supposed to happen. \
+                                Last snapshot timestamps: 
+                                {}", 
+                                snapshots.iter()
+                                .fold("".to_owned(), |acc, x| acc + ", " + &x.timestamp.to_rfc3339()))
+                            }
                             Some(snapshot) => {
                                 println!("Found snapshot of system state with killed process. Snapshot taken at {}", snapshot.timestamp.to_rfc3339());
                                 println!("Memory: Used {} out of {}, or {}%", snapshot.used_memory, snapshot.total_memory, memory_percentage(snapshot.used_memory, snapshot.total_memory));
