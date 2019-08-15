@@ -174,7 +174,7 @@ fn parent_to_string(parent: Option<i32>) -> String {
 fn get_user_by_uid(uid: u32) -> String {
     match users::get_user_by_uid(uid) {
         None => "None".to_owned(),
-        Some(user) => format!("{:?}", user.name())
+        Some(user) => user.name().to_str().unwrap_or("").to_owned()
     }
 }
 
@@ -182,9 +182,9 @@ fn print_processes_by_memory(snapshot: &SystemState) {
     let mut processes:Vec<Process> = snapshot.processes.iter().map(|(_, process)| process.clone()).collect();
     processes.sort_by_key(|process| process.memory());
     println!("Processes, sorted by memory usage:");
-    println!("{:17}\t {:7}\t {:7?}\t {:30}\t {:9}kB\t {:9}%\t {:9}%\t {:?}", "User", "PID", "PPID", "Name", "Mem ", "Mem ", "CPU ", "CMD");
+    println!("{:17} {:7} {:7} {:30} {:9}kB {:12}% {:12}% {}", "User", "PID", "PPID", "Name", "Mem ", "Mem ", "CPU ", "CMD");
     for process in processes {
-        println!("{:17}\t {:7}\t {:7?}\t {:30}\t {:9}kB\t {:9}%\t {:9}%\t {:?}",
+        println!("{:17} {:7} {:7} {:30} {:9}kB {:12}% {:12}% {:?}",
         get_user_by_uid(process.uid), process.pid(), parent_to_string(process.parent()), process.name(), process.memory(), memory_percentage(process.memory(), snapshot.total_memory), process.cpu_usage(), process.cmd());
     }
 }
