@@ -82,8 +82,8 @@ fn main() {
                                 processes.sort_by_key(|process| process.memory());
                                 println!("Processes, sorted by memory usage:");
                                 for process in processes {
-                                    println!("PID: {:7}\t Name: {:30}\t Parent: {:7?}\t Memory: {:9}kB or {:9}%\t Processor: {:9}%\t CMD: {:?}",
-                                    process.pid(), process.name(), parent_to_string(process.parent()), process.memory(), memory_percentage(process.memory(), snapshot.total_memory), process.cpu_usage(), process.cmd());
+                                    println!("User: {:?}\t PID: {:7}\t Parent: {:7?}\t Name: {:30}\t Memory: {:9}kB or {:9}%\t Processor: {:9}%\t CMD: {:?}",
+                                    get_user_by_uid(process.uid), process.pid(), parent_to_string(process.parent()), process.name(), process.memory(), memory_percentage(process.memory(), snapshot.total_memory), process.cpu_usage(), process.cmd());
                                 }
                             }
                         }
@@ -166,5 +166,12 @@ fn parent_to_string(parent: Option<i32>) -> String {
     match parent {
         Some(pid) => pid.to_string(),
         None => "None".to_owned()
+    }
+}
+
+fn get_user_by_uid(uid: u32) -> String {
+    match users::get_user_by_uid(uid) {
+        None => "None".to_owned(),
+        Some(user) => format!("{:?}", user.name())
     }
 }
