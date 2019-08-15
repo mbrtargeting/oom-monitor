@@ -69,12 +69,13 @@ fn main() {
                         let maybe_last_snapshot = get_snapshot_with_killed_process(&snapshots, killed_process_id);
                         match maybe_last_snapshot {
                             None => {
-                                println!("No snapshot with killed process in queue. \
-                                That's not supposed to happen. \
-                                Last snapshot timestamps: 
-                                {}", 
-                                snapshots.iter()
-                                .fold("".to_owned(), |acc, x| acc + ", " + &x.timestamp.to_rfc3339()))
+                                match snapshots.front() {
+                                    None => println!("No snapshots in queue, so we have nothing to print."),
+                                    Some(snapshot) => {
+                                        println!("No snapshot with killed process in queue. For debugging purposes, we'll print out the last snapshot");
+                                        print_processes_by_memory(snapshot)
+                                    }
+                                }
                             }
                             Some(snapshot) => {
                                 println!("Found snapshot of system state with killed process. Snapshot taken at {}", snapshot.timestamp.to_rfc3339());
