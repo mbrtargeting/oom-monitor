@@ -141,15 +141,19 @@ fn process_to_long_string(process: &Process, snapshot: &SystemState) -> String {
     Name: {}
     Memory: {}kB or {}%
     CPU: {}%
-    Parent: {:?}
+    Parent: {}
     CMD: {:?}
     Environment: {}
     Status: {}
-    Start time: {}s", process.pid(), process.name(), process.memory(),
+    Start time: {}s
+    CWD: {:?}
+    Root: {:?}
+    Executable: {:?}", process.pid(), process.name(), process.memory(),
     memory_percentage(process.memory(), snapshot.total_memory),
     process.cpu_usage(), parent_to_string(process.parent()), process.cmd(),
     stringlist_to_string(process.environ()), process.status(),
-    process.start_time()).to_owned()
+    process.start_time(), process.cwd(), process.root(), process.exe()
+    ).to_owned()
 }
 
 fn stringlist_to_string(list: &[String]) -> String {
