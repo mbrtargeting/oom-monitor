@@ -85,13 +85,7 @@ fn main() {
                                     None => println!("get_snapshot_with_killed_process malfunctioned. Should never happen"),
                                     Some(killed_process) => println!("The following process was killed: {}", process_to_long_string(killed_process, &snapshot))
                                 }
-                                let mut processes:Vec<Process> = snapshot.processes.iter().map(|(_, process)| process.clone()).collect();
-                                processes.sort_by_key(|process| process.memory());
-                                println!("Processes, sorted by memory usage:");
-                                for process in processes {
-                                    println!("User: {:?}\t PID: {:7}\t Parent: {:7?}\t Name: {:30}\t Memory: {:9}kB or {:9}%\t Processor: {:9}%\t CMD: {:?}",
-                                    get_user_by_uid(process.uid), process.pid(), parent_to_string(process.parent()), process.name(), process.memory(), memory_percentage(process.memory(), snapshot.total_memory), process.cpu_usage(), process.cmd());
-                                }
+                                print_processes_by_memory(snapshot)
                             }
                         }
                         println!("\n#\n#\n#\n#\n#\n#\n#\n#\n#\n#\n#\n#");
@@ -180,5 +174,16 @@ fn get_user_by_uid(uid: u32) -> String {
     match users::get_user_by_uid(uid) {
         None => "None".to_owned(),
         Some(user) => format!("{:?}", user.name())
+    }
+}
+
+fn print_processes_by_memory(snapshot: &SystemState) {
+    let mut processes:Vec<Process> = snapshot.processes.iter().map(|(_, process)| process.clone()).collect();
+    processes.sort_by_key(|process| process.memory());
+    println!("Processes, sorted by memory usage:");
+    println!("{:17}\t {:7}\t {:7?}\t {:30}\t {:9}kB\t {:9}%\t {:9}%\t {:?}", "User", "PID", "PPID", "Name", "Mem ", "Mem ", "CPU ", "CMD");
+    for process in processes {
+        println!("{:17}\t {:7}\t {:7?}\t {:30}\t {:9}kB\t {:9}%\t {:9}%\t {:?}",
+        get_user_by_uid(process.uid), process.pid(), parent_to_string(process.parent()), process.name(), process.memory(), memory_percentage(process.memory(), snapshot.total_memory), process.cpu_usage(), process.cmd());
     }
 }
