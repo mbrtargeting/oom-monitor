@@ -175,7 +175,7 @@ dependencies = [
 
 [[package]]
 name = "oom-monitor"
-version = "0.2.0"
+version = "1.0.0"
 dependencies = [
  "chrono 0.4.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "env_logger 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
