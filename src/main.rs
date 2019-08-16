@@ -229,9 +229,9 @@ fn print_processes_by_memory(snapshot: &SystemState) {
     let mut processes:Vec<Process> = snapshot.processes.iter().map(|(_, process)| process.clone()).collect();
     processes.sort_by_key(|process| process.memory());
     info!("Processes, sorted by memory usage:");
-    info!("{:17} {:7} {:7} {:30} {:9}kB {:12}% {:12}% {}", "User", "PID", "PPID", "Name", "Mem ", "Mem ", "CPU ", "CMD");
+    info!("{:17} {:7} {:7} {:30} {:9}kB {:7.7}% {:7.7}% {}", "User", "PID", "PPID", "Name (truncated)", "Mem ", "Mem ", "CPU ", "CMD");
     for process in processes {
-        info!("{:17} {:7} {:7} {:30} {:9}kB {:12}% {:12}% {:?}",
+        info!("{:17} {:7} {:7} {:30.30} {:9}kB {:5.5}% {:5.5}% {:?}",
         get_user_by_uid(process.uid), process.pid(), parent_to_string(process.parent()), process.name(), process.memory(), memory_percentage(process.memory(), snapshot.total_memory), process.cpu_usage(), process.cmd());
     }
 }
