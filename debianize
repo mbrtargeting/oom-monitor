@@ -12,4 +12,5 @@ fpm -s dir \
    --name oom-monitor \
    --verbose \
    --version 1.0.0 \
-   ./target/x86_64-unknown-linux-musl/release/oom-monitor=/usr/bin/oom-monitor
+   ./target/x86_64-unknown-linux-musl/release/oom-monitor=/usr/bin/oom-monitor \
+   ./oom-monitor.service=/etc/systemd/system/oom-monitor.service
