@@ -1,0 +1,15 @@
+#!/bin/bash -eu
+
+cargo build --release --target x86_64-unknown-linux-musl
+
+rm *.deb -f
+
+fpm -s dir \
+   -t deb \
+   --iteration 1 \
+   --architecture all \
+   --deb-ignore-iteration-in-dependencies \
+   --name oom-monitor \
+   --verbose \
+   --version 1.0.0 \
+   ./target/x86_64-unknown-linux-musl/release/oom-monitor=/usr/bin/oom-monitor
