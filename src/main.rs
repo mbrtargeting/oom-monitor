@@ -5,9 +5,10 @@ extern crate regex;
 extern crate log;
 extern crate env_logger;
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, Utc};
 use env_logger::Env;
 use regex::Regex;
+use std::cmp;
 use std::collections::{HashMap, VecDeque};
 use std::env;
 use std::io::Write;
@@ -27,6 +28,12 @@ struct SystemState {
     processes: HashMap<Pid, Process>,
 }
 
+struct MaxMemData {
+    highest_seen_memory_usage: u64,
+    have_recently_printed_max_mem_usage: bool,
+    system_total_memory: u64,
+}
+
 fn main() {
     let mut builder = env_logger::from_env(Env::default().default_filter_or("info"));
     if env::var("RUST_LOG_NO_FORMAT") == Ok("true".to_owned()) {
@@ -39,6 +46,12 @@ fn main() {
     let mut snapshots: VecDeque<SystemState> = VecDeque::new();
     let mut already_seen_ooms: HashMap<String, ()> = HashMap::new();
     let mut now_seen_ooms: HashMap<String, ()>;
+
+    let mut max_mem_data = MaxMemData {
+        highest_seen_memory_usage: 0,
+        have_recently_printed_max_mem_usage: false,
+        system_total_memory: system.get_total_memory(),
+    };
 
     match get_dmesg_kill_lines() {
         Err(e) => {
@@ -67,6 +80,8 @@ fn main() {
             processes: system.get_process_list().to_owned(),
         };
         snapshots.push_front(current_system_state);
+
+        max_mem_data = handle_max_mem_statistics(max_mem_data, system.get_used_memory());
 
         thread::sleep(a_second);
 
@@ -159,6 +174,48 @@ fn extract_pid_from_kill_line(line: &str) -> Result<i32, String> {
             },
         },
     }
+}
+
+fn handle_max_mem_statistics(max_mem_data: MaxMemData, used_memory: u64) -> MaxMemData {
+    let now = Utc::now();
+    let next_midnight = (now + Duration::days(1)).date().and_hms(0, 0, 0);
+    let previous_midnight = now.date().and_hms(0, 0, 0);
+    let midday = now.date().and_hms(12, 0, 0);
+    let ready_to_print = !max_mem_data.have_recently_printed_max_mem_usage;
+
+    if ready_to_print
+        && ((next_midnight - now).num_seconds().abs() < 10
+            || (previous_midnight - now).num_seconds().abs() < 10)
+    {
+        info!(
+            "Max seen memory usage throughout the day: {}kB. That's {}%",
+            max_mem_data.highest_seen_memory_usage,
+            memory_percentage(
+                max_mem_data.highest_seen_memory_usage,
+                max_mem_data.system_total_memory
+            )
+        );
+        return MaxMemData {
+            highest_seen_memory_usage: used_memory,
+            have_recently_printed_max_mem_usage: true,
+            system_total_memory: max_mem_data.system_total_memory,
+        };
+    }
+    if (midday - now).num_seconds().abs() < 10 {
+        return MaxMemData {
+            highest_seen_memory_usage: cmp::max(
+                max_mem_data.highest_seen_memory_usage,
+                used_memory,
+            ),
+            have_recently_printed_max_mem_usage: false,
+            system_total_memory: max_mem_data.system_total_memory,
+        };
+    }
+    return MaxMemData {
+        highest_seen_memory_usage: cmp::max(max_mem_data.highest_seen_memory_usage, used_memory),
+        have_recently_printed_max_mem_usage: max_mem_data.have_recently_printed_max_mem_usage,
+        system_total_memory: max_mem_data.system_total_memory,
+    };
 }
 
 fn get_snapshot_with_killed_process(
