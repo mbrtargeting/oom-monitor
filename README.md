@@ -30,3 +30,13 @@ sudo echo "1" > /proc/sys/kernel/sysrq && sudo echo f > /proc/sysrq-trigger && d
 ```
 
 (replace 176 with whatever value is present in `/proc/sys/kernel/sysrq` by default on your computer)
+
+## Building and packaging
+
+(tested on Ubuntu 18.04 system)
+
+Only support creating deb packages for now, although the raw binary should work on all (amd64?) Linux systems. If you want to just build a raw binary, you can do so using `cargo build --release`.
+
+The `debianize` script requires `fpm`. Install by following the instructions here: <https://fpm.readthedocs.io/en/latest/installing.html>
+
+Then run `./debianize` while in the root folder of the project.
