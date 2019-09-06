@@ -1,6 +1,6 @@
 [package]
 name = "oom-monitor"
-version = "1.0.0"
+version = "1.1.0"
 authors = ["Tormod G. Hellen <tormod@mbr-targeting.com>"]
 edition = "2018"
 

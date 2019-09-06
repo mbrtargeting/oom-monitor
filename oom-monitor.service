@@ -4,6 +4,7 @@ After=syslog.target network.target remote-fs.target nss-lookup.target
 
 [Service]
 Environment=RUST_LOG_STYLE=never
+Environment=RUST_LOG_NO_FORMAT=true
 Type=simple
 PIDFile=/run/oom-monitor.pid
 ExecStart=/usr/bin/oom-monitor

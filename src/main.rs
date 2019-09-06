@@ -13,6 +13,8 @@ use chrono::{DateTime, Utc};
 use env_logger::Env;
 use regex::Regex;
 use std::collections::{HashMap, VecDeque};
+use std::env;
+use std::io::Write;
 use std::process;
 use std::process::Command;
 use std::str;
@@ -30,7 +32,11 @@ struct SystemState {
 }
 
 fn main() {
-    env_logger::from_env(Env::default().default_filter_or("info")).init();
+    let mut builder = env_logger::from_env(Env::default().default_filter_or("info"));
+    if env::var("RUST_LOG_NO_FORMAT") == Ok("true".to_owned()) {
+        &builder.format(|buf, record| writeln!(buf, "{}: {}", record.level(), record.args()));
+    }
+    builder.init();
 
     let a_second = time::Duration::from_millis(1000);
     let mut system = sysinfo::System::new();
