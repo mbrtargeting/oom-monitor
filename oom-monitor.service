@@ -9,3 +9,6 @@ Type=simple
 PIDFile=/run/oom-monitor.pid
 ExecStart=/usr/bin/oom-monitor
 Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
