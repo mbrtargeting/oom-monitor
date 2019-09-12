@@ -67,7 +67,8 @@ fn main() {
     }
 
     loop {
-        system.refresh_all();
+        system.refresh_system();
+        system.refresh_processes();
 
         snapshots.truncate(10);
 
