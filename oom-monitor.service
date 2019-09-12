@@ -9,6 +9,9 @@ Type=simple
 PIDFile=/run/oom-monitor.pid
 ExecStart=/usr/bin/oom-monitor
 Restart=on-failure
+MemoryAccounting=yes
+MemoryHigh=2%
+MemoryMax=3%
 
 [Install]
 WantedBy=multi-user.target
