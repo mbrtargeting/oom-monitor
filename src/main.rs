@@ -16,7 +16,7 @@ use std::process;
 use std::process::Command;
 use std::str;
 use std::{thread, time};
-use sysinfo::{Pid, Process, ProcessExt, SystemExt};
+use sysinfo::{Pid, Process, ProcessExt, SystemExt, RefreshKind};
 
 #[derive(Debug)]
 struct SystemState {
@@ -31,7 +31,6 @@ struct SystemState {
 struct MaxMemData {
     highest_seen_memory_usage: u64,
     have_recently_printed_max_mem_usage: bool,
-    system_total_memory: u64,
 }
 
 struct OomData {
@@ -47,13 +46,11 @@ fn main() {
     builder.init();
 
     let a_second = time::Duration::from_millis(1000);
-    let mut system = sysinfo::System::new();
     let mut already_seen_ooms: HashMap<String, ()> = HashMap::new();
 
     let mut max_mem_data = MaxMemData {
         highest_seen_memory_usage: 0,
         have_recently_printed_max_mem_usage: false,
-        system_total_memory: system.get_total_memory(),
     };
 
     match get_dmesg_kill_lines() {
@@ -75,17 +72,16 @@ fn main() {
     };
 
     loop {
-        system.refresh_system();
-        system.refresh_processes();
-
-        max_mem_data = handle_max_mem_statistics(max_mem_data, system.get_used_memory());
-        oom_data = handle_ooms(&system, oom_data);
+        max_mem_data = handle_max_mem_statistics(max_mem_data);
+        oom_data = handle_ooms(oom_data);
 
         thread::sleep(a_second);
     }
 }
 
-fn handle_ooms(system: &sysinfo::System, oom_data: OomData) -> OomData {
+fn handle_ooms(oom_data: OomData) -> OomData {
+    let system = sysinfo::System::new_with_specifics(RefreshKind::new().with_system().with_processes());
+
     let mut snapshots = oom_data.snapshots;
 
     let current_system_state = SystemState {
@@ -176,29 +172,29 @@ fn handle_ooms(system: &sysinfo::System, oom_data: OomData) -> OomData {
     }
 }
 
-fn handle_max_mem_statistics(max_mem_data: MaxMemData, used_memory: u64) -> MaxMemData {
+fn handle_max_mem_statistics(max_mem_data: MaxMemData) -> MaxMemData {
     let now = Utc::now();
     let next_midnight = (now + Duration::days(1)).date().and_hms(0, 0, 0);
     let previous_midnight = now.date().and_hms(0, 0, 0);
     let midday = now.date().and_hms(12, 0, 0);
     let ready_to_print = !max_mem_data.have_recently_printed_max_mem_usage;
 
+    let system = sysinfo::System::new_with_specifics(RefreshKind::new().with_system());
+    let used_memory = system.get_used_memory();
+
     if ready_to_print
         && ((next_midnight - now).num_seconds().abs() < 10
             || (previous_midnight - now).num_seconds().abs() < 10)
     {
+        let system_total_memory = system.get_total_memory();
         info!(
             "Max seen memory usage throughout the day: {}kB. That's {}%",
             max_mem_data.highest_seen_memory_usage,
-            memory_percentage(
-                max_mem_data.highest_seen_memory_usage,
-                max_mem_data.system_total_memory
-            )
+            memory_percentage(max_mem_data.highest_seen_memory_usage, system_total_memory)
         );
         return MaxMemData {
             highest_seen_memory_usage: used_memory,
             have_recently_printed_max_mem_usage: true,
-            system_total_memory: max_mem_data.system_total_memory,
         };
     }
     if (midday - now).num_seconds().abs() < 10 {
@@ -208,13 +204,11 @@ fn handle_max_mem_statistics(max_mem_data: MaxMemData, used_memory: u64) -> MaxM
                 used_memory,
             ),
             have_recently_printed_max_mem_usage: false,
-            system_total_memory: max_mem_data.system_total_memory,
         };
     }
     return MaxMemData {
         highest_seen_memory_usage: cmp::max(max_mem_data.highest_seen_memory_usage, used_memory),
         have_recently_printed_max_mem_usage: max_mem_data.have_recently_printed_max_mem_usage,
-        system_total_memory: max_mem_data.system_total_memory,
     };
 }
 
