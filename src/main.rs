@@ -109,7 +109,11 @@ fn handle_ooms(oom_data: OomData, system: &sysinfo::System) -> OomData {
     let maybe_kill_lines = get_dmesg_kill_lines();
     match maybe_kill_lines {
         Err(e) => {
-            error!("Problems with dmesg: {}", e);
+            if e.contains("Out of memory") {
+                warn!("System state means dmesg has problems: {}", e);
+            } else {
+                error!("Problems with dmesg: {}", e);
+            }
             return OomData {
                 snapshots: snapshots,
                 already_seen_ooms: oom_data.already_seen_ooms,
