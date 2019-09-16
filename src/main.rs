@@ -8,7 +8,6 @@ extern crate env_logger;
 use chrono::{DateTime, Duration, Utc};
 use env_logger::Env;
 use regex::Regex;
-use std::cmp;
 use std::collections::{HashMap, VecDeque};
 use std::env;
 use std::io::Write;
@@ -16,7 +15,7 @@ use std::process;
 use std::process::Command;
 use std::str;
 use std::{thread, time};
-use sysinfo::{Pid, Process, ProcessExt, SystemExt};
+use sysinfo::{Pid, Process, ProcessExt, RefreshKind, SystemExt};
 
 #[derive(Debug)]
 struct SystemState {
@@ -28,8 +27,38 @@ struct SystemState {
     processes: HashMap<Pid, Process>,
 }
 
+impl SystemState {
+    fn new(maybe_system: Option<&sysinfo::System>) -> SystemState {
+        match maybe_system {
+            None => {
+                let system = sysinfo::System::new_with_specifics(
+                    RefreshKind::new().with_system().with_processes(),
+                );
+                return SystemState {
+                    timestamp: Utc::now(),
+                    total_memory: system.get_total_memory(),
+                    used_memory: system.get_used_memory(),
+                    total_swap: system.get_total_swap(),
+                    used_swap: system.get_used_swap(),
+                    processes: system.get_process_list().to_owned(),
+                };
+            }
+            Some(system) => {
+                return SystemState {
+                    timestamp: Utc::now(),
+                    total_memory: system.get_total_memory(),
+                    used_memory: system.get_used_memory(),
+                    total_swap: system.get_total_swap(),
+                    used_swap: system.get_used_swap(),
+                    processes: system.get_process_list().to_owned(),
+                };
+            }
+        };
+    }
+}
+
 struct MaxMemData {
-    highest_seen_memory_usage: u64,
+    max_mem_snapshot: SystemState,
     have_recently_printed_max_mem_usage: bool,
 }
 
@@ -49,7 +78,7 @@ fn main() {
     let mut already_seen_ooms: HashMap<String, ()> = HashMap::new();
 
     let mut max_mem_data = MaxMemData {
-        highest_seen_memory_usage: 0,
+        max_mem_snapshot: SystemState::new(None),
         have_recently_printed_max_mem_usage: false,
     };
 
@@ -95,15 +124,7 @@ fn main() {
 fn handle_ooms(oom_data: OomData, system: &sysinfo::System) -> OomData {
     let mut snapshots = oom_data.snapshots;
 
-    let current_system_state = SystemState {
-        timestamp: Utc::now(),
-        total_memory: system.get_total_memory(),
-        used_memory: system.get_used_memory(),
-        total_swap: system.get_total_swap(),
-        used_swap: system.get_used_swap(),
-        processes: system.get_process_list().to_owned(),
-    };
-    snapshots.push_front(current_system_state);
+    snapshots.push_front(SystemState::new(Some(system)));
     snapshots.truncate(10);
 
     let maybe_kill_lines = get_dmesg_kill_lines();
@@ -194,7 +215,7 @@ fn handle_max_mem_statistics(max_mem_data: MaxMemData, system: &sysinfo::System)
     let midday = now.date().and_hms(12, 0, 0);
     let ready_to_print = !max_mem_data.have_recently_printed_max_mem_usage;
 
-    let used_memory = system.get_used_memory();
+    let current_snapshot = SystemState::new(Some(system));
 
     if ready_to_print
         && ((next_midnight - now).num_seconds().abs() < 10
@@ -203,27 +224,43 @@ fn handle_max_mem_statistics(max_mem_data: MaxMemData, system: &sysinfo::System)
         let system_total_memory = system.get_total_memory();
         info!(
             "Max seen memory usage throughout the day: {}kB. That's {}%",
-            max_mem_data.highest_seen_memory_usage,
-            memory_percentage(max_mem_data.highest_seen_memory_usage, system_total_memory)
+            max_mem_data.max_mem_snapshot.used_memory,
+            memory_percentage(
+                max_mem_data.max_mem_snapshot.used_memory,
+                system_total_memory
+            )
         );
+        info!("Here is the system at that time:");
+        print_processes_by_memory(&max_mem_data.max_mem_snapshot);
         return MaxMemData {
-            highest_seen_memory_usage: used_memory,
+            max_mem_snapshot: SystemState::new(Some(system)),
             have_recently_printed_max_mem_usage: true,
         };
     }
     if (midday - now).num_seconds().abs() < 10 {
         return MaxMemData {
-            highest_seen_memory_usage: cmp::max(
-                max_mem_data.highest_seen_memory_usage,
-                used_memory,
+            max_mem_snapshot: systemstate_with_highest_mem_usage(
+                max_mem_data.max_mem_snapshot,
+                current_snapshot,
             ),
             have_recently_printed_max_mem_usage: false,
         };
     }
     return MaxMemData {
-        highest_seen_memory_usage: cmp::max(max_mem_data.highest_seen_memory_usage, used_memory),
+        max_mem_snapshot: systemstate_with_highest_mem_usage(
+            max_mem_data.max_mem_snapshot,
+            current_snapshot,
+        ),
         have_recently_printed_max_mem_usage: max_mem_data.have_recently_printed_max_mem_usage,
     };
+}
+
+fn systemstate_with_highest_mem_usage(a: SystemState, b: SystemState) -> SystemState {
+    if a.used_memory > b.used_memory {
+        return a;
+    } else {
+        return b;
+    }
 }
 
 fn extract_pid_from_kill_line(line: &str) -> Result<i32, String> {
