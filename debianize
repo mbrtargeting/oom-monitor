@@ -11,7 +11,7 @@ fpm -s dir \
    --deb-ignore-iteration-in-dependencies \
    --name oom-monitor \
    --verbose \
-   --version 1.2.2 \
+   --version 1.2.3 \
    --depends systemd \
    --deb-systemd ./oom-monitor.service \
    ./target/x86_64-unknown-linux-musl/release/oom-monitor=/usr/bin/oom-monitor
