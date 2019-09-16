@@ -34,6 +34,11 @@ struct MaxMemData {
     system_total_memory: u64,
 }
 
+struct OomData {
+    snapshots: VecDeque<SystemState>,
+    already_seen_ooms: HashMap<String, ()>,
+}
+
 fn main() {
     let mut builder = env_logger::from_env(Env::default().default_filter_or("info"));
     if env::var("RUST_LOG_NO_FORMAT") == Ok("true".to_owned()) {
@@ -43,9 +48,7 @@ fn main() {
 
     let a_second = time::Duration::from_millis(1000);
     let mut system = sysinfo::System::new();
-    let mut snapshots: VecDeque<SystemState> = VecDeque::new();
     let mut already_seen_ooms: HashMap<String, ()> = HashMap::new();
-    let mut now_seen_ooms: HashMap<String, ()>;
 
     let mut max_mem_data = MaxMemData {
         highest_seen_memory_usage: 0,
@@ -66,114 +69,110 @@ fn main() {
         }
     }
 
+    let mut oom_data = OomData {
+        snapshots: VecDeque::new(),
+        already_seen_ooms: already_seen_ooms,
+    };
+
     loop {
         system.refresh_system();
         system.refresh_processes();
 
-        snapshots.truncate(10);
-
-        let current_system_state = SystemState {
-            timestamp: Utc::now(),
-            total_memory: system.get_total_memory(),
-            used_memory: system.get_used_memory(),
-            total_swap: system.get_total_swap(),
-            used_swap: system.get_used_swap(),
-            processes: system.get_process_list().to_owned(),
-        };
-        snapshots.push_front(current_system_state);
-
         max_mem_data = handle_max_mem_statistics(max_mem_data, system.get_used_memory());
+        oom_data = handle_ooms(&system, oom_data);
 
         thread::sleep(a_second);
-
-        let maybe_kill_lines = get_dmesg_kill_lines();
-        match maybe_kill_lines {
-            Err(e) => error!("Problems with dmesg: {}", e),
-            Ok(kill_lines) => {
-                now_seen_ooms = HashMap::new();
-                for line in kill_lines {
-                    let is_new = !already_seen_ooms.contains_key(&line);
-                    now_seen_ooms.insert(line.to_owned(), ());
-                    if is_new {
-                        info!(
-                            "Observed OOM kill. The dmesg line looks like this: \"{}\"",
-                            line
-                        );
-                        match extract_pid_from_kill_line(&line) {
-                            Err(e) => {
-                                error!("Failed to extract pid from kill line: {}", e);
-                                error!("Fatal flaw in program. Exiting.");
-                                process::exit(1);
-                            }
-                            Ok(killed_process_id) => {
-                                let maybe_last_snapshot =
-                                    get_snapshot_with_killed_process(&snapshots, killed_process_id);
-                                match maybe_last_snapshot {
-                                    None => match snapshots.front() {
-                                        None => error!(
-                                            "No snapshots in queue, so we have nothing to print."
-                                        ),
-                                        Some(snapshot) => {
-                                            error!("No snapshot with killed process in queue. For debugging purposes, we'll print out the last snapshot");
-                                            print_processes_by_memory(snapshot)
-                                        }
-                                    },
-                                    Some(snapshot) => {
-                                        info!("Found snapshot of system state with killed process. Snapshot taken at {}", snapshot.timestamp.to_rfc3339());
-                                        info!(
-                                            "Memory: Used {} out of {}, or {}%",
-                                            snapshot.used_memory,
-                                            snapshot.total_memory,
-                                            memory_percentage(
-                                                snapshot.used_memory,
-                                                snapshot.total_memory
-                                            )
-                                        );
-                                        info!(
-                                            "Swap: Used {} out of {}, or {}%",
-                                            snapshot.used_swap,
-                                            snapshot.total_swap,
-                                            memory_percentage(
-                                                snapshot.used_swap,
-                                                snapshot.total_swap
-                                            )
-                                        );
-                                        let maybe_killed_process =
-                                            snapshot.processes.get(&killed_process_id);
-                                        match maybe_killed_process {
-                                            None => error!("get_snapshot_with_killed_process malfunctioned. Should never happen"),
-                                            Some(killed_process) => info!("The following process was killed: {}", process_to_long_string(killed_process, &snapshot))
-                                        }
-                                        print_processes_by_memory(snapshot)
-                                    }
-                                }
-                                info!("\n#\n#\n#\n#\n#\n#\n#\n#\n#\n#\n#\n#");
-                            }
-                        }
-                    }
-                }
-                already_seen_ooms = now_seen_ooms;
-            }
-        }
     }
 }
 
-fn extract_pid_from_kill_line(line: &str) -> Result<i32, String> {
-    match Regex::new(r"Killed process (\d*)") {
-        Err(e) => Err(format!("Could not compile regex: {}", e)),
-        Ok(re) => match re.captures(&line) {
-            None => Err(format!(
-                "No captures in line \"{}\" even though it was registered as a kill line.",
-                line
-            )),
-            Some(cap) => match cap.get(1) {
-                None => Err(format!("Could not match PID.")),
-                Some(pidstring) => match pidstring.as_str().parse::<i32>() {
-                    Err(e) => Err(format!("Process ID could not be mapped to int: {}", e)),
-                    Ok(pid) => Ok(pid),
-                },
-            },
-        },
+fn handle_ooms(system: &sysinfo::System, oom_data: OomData) -> OomData {
+    let mut snapshots = oom_data.snapshots;
+
+    let current_system_state = SystemState {
+        timestamp: Utc::now(),
+        total_memory: system.get_total_memory(),
+        used_memory: system.get_used_memory(),
+        total_swap: system.get_total_swap(),
+        used_swap: system.get_used_swap(),
+        processes: system.get_process_list().to_owned(),
+    };
+    snapshots.push_front(current_system_state);
+    snapshots.truncate(10);
+
+    let maybe_kill_lines = get_dmesg_kill_lines();
+    match maybe_kill_lines {
+        Err(e) => {
+            error!("Problems with dmesg: {}", e);
+            return OomData {
+                snapshots: snapshots,
+                already_seen_ooms: oom_data.already_seen_ooms,
+            };
+        }
+        Ok(kill_lines) => {
+            let mut now_seen_ooms = HashMap::new();
+            for line in kill_lines {
+                let is_new = !oom_data.already_seen_ooms.contains_key(&line);
+                now_seen_ooms.insert(line.to_owned(), ());
+                if is_new {
+                    info!(
+                        "Observed OOM kill. The dmesg line looks like this: \"{}\"",
+                        line
+                    );
+                    match extract_pid_from_kill_line(&line) {
+                        Err(e) => {
+                            error!("Failed to extract pid from kill line: {}", e);
+                            error!("Fatal flaw in program. Exiting.");
+                            process::exit(1);
+                        }
+                        Ok(killed_process_id) => {
+                            let maybe_last_snapshot =
+                                get_snapshot_with_killed_process(&snapshots, killed_process_id);
+                            match maybe_last_snapshot {
+                                None => match snapshots.front() {
+                                    None => error!(
+                                        "No snapshots in queue, so we have nothing to print."
+                                    ),
+                                    Some(snapshot) => {
+                                        error!("No snapshot with killed process in queue. For debugging purposes, we'll print out the last snapshot");
+                                        print_processes_by_memory(snapshot)
+                                    }
+                                },
+                                Some(snapshot) => {
+                                    info!("Found snapshot of system state with killed process. Snapshot taken at {}", snapshot.timestamp.to_rfc3339());
+                                    info!(
+                                        "Memory: Used {} out of {}, or {}%",
+                                        snapshot.used_memory,
+                                        snapshot.total_memory,
+                                        memory_percentage(
+                                            snapshot.used_memory,
+                                            snapshot.total_memory
+                                        )
+                                    );
+                                    info!(
+                                        "Swap: Used {} out of {}, or {}%",
+                                        snapshot.used_swap,
+                                        snapshot.total_swap,
+                                        memory_percentage(snapshot.used_swap, snapshot.total_swap)
+                                    );
+                                    let maybe_killed_process =
+                                        snapshot.processes.get(&killed_process_id);
+                                    match maybe_killed_process {
+                                            None => error!("get_snapshot_with_killed_process malfunctioned. Should never happen"),
+                                            Some(killed_process) => info!("The following process was killed: {}", process_to_long_string(killed_process, &snapshot))
+                                        }
+                                    print_processes_by_memory(snapshot)
+                                }
+                            }
+                            info!("\n#\n#\n#\n#\n#\n#\n#\n#\n#\n#\n#\n#");
+                        }
+                    }
+                }
+            }
+            return OomData {
+                snapshots: snapshots,
+                already_seen_ooms: now_seen_ooms,
+            };
+        }
     }
 }
 
@@ -217,6 +216,25 @@ fn handle_max_mem_statistics(max_mem_data: MaxMemData, used_memory: u64) -> MaxM
         have_recently_printed_max_mem_usage: max_mem_data.have_recently_printed_max_mem_usage,
         system_total_memory: max_mem_data.system_total_memory,
     };
+}
+
+fn extract_pid_from_kill_line(line: &str) -> Result<i32, String> {
+    match Regex::new(r"Killed process (\d*)") {
+        Err(e) => Err(format!("Could not compile regex: {}", e)),
+        Ok(re) => match re.captures(&line) {
+            None => Err(format!(
+                "No captures in line \"{}\" even though it was registered as a kill line.",
+                line
+            )),
+            Some(cap) => match cap.get(1) {
+                None => Err(format!("Could not match PID.")),
+                Some(pidstring) => match pidstring.as_str().parse::<i32>() {
+                    Err(e) => Err(format!("Process ID could not be mapped to int: {}", e)),
+                    Ok(pid) => Ok(pid),
+                },
+            },
+        },
+    }
 }
 
 fn get_snapshot_with_killed_process(
