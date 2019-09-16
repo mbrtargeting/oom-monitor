@@ -16,7 +16,7 @@ use std::process;
 use std::process::Command;
 use std::str;
 use std::{thread, time};
-use sysinfo::{Pid, Process, ProcessExt, SystemExt, RefreshKind};
+use sysinfo::{Pid, Process, ProcessExt, SystemExt};
 
 #[derive(Debug)]
 struct SystemState {
@@ -71,17 +71,28 @@ fn main() {
         already_seen_ooms: already_seen_ooms,
     };
 
+    let mut system = sysinfo::System::new();
+    let mut countdown_to_system_reinstantiation = 100;
+
     loop {
-        max_mem_data = handle_max_mem_statistics(max_mem_data);
-        oom_data = handle_ooms(oom_data);
+        // sysinfo::System leaks memory, but is expensive to instantiate
+        countdown_to_system_reinstantiation = countdown_to_system_reinstantiation - 1;
+        if countdown_to_system_reinstantiation == 0 {
+            countdown_to_system_reinstantiation = 100;
+            system = sysinfo::System::new();
+        }
+
+        system.refresh_system();
+        system.refresh_processes();
+
+        max_mem_data = handle_max_mem_statistics(max_mem_data, &system);
+        oom_data = handle_ooms(oom_data, &system);
 
         thread::sleep(a_second);
     }
 }
 
-fn handle_ooms(oom_data: OomData) -> OomData {
-    let system = sysinfo::System::new_with_specifics(RefreshKind::new().with_system().with_processes());
-
+fn handle_ooms(oom_data: OomData, system: &sysinfo::System) -> OomData {
     let mut snapshots = oom_data.snapshots;
 
     let current_system_state = SystemState {
@@ -172,14 +183,13 @@ fn handle_ooms(oom_data: OomData) -> OomData {
     }
 }
 
-fn handle_max_mem_statistics(max_mem_data: MaxMemData) -> MaxMemData {
+fn handle_max_mem_statistics(max_mem_data: MaxMemData, system: &sysinfo::System) -> MaxMemData {
     let now = Utc::now();
     let next_midnight = (now + Duration::days(1)).date().and_hms(0, 0, 0);
     let previous_midnight = now.date().and_hms(0, 0, 0);
     let midday = now.date().and_hms(12, 0, 0);
     let ready_to_print = !max_mem_data.have_recently_printed_max_mem_usage;
 
-    let system = sysinfo::System::new_with_specifics(RefreshKind::new().with_system());
     let used_memory = system.get_used_memory();
 
     if ready_to_print
