@@ -63,6 +63,30 @@ struct OomData {
     already_seen_ooms: HashMap<String, ()>,
 }
 
+struct ProcessTreeElement {
+    uid: u32,
+    pid: i32,
+    parent: Option<Box<ProcessTreeElement>>,
+    name: String,
+    memory: u64,
+    cpu_usage: f32,
+    cmd: String,
+}
+
+impl ProcessTreeElement {
+    fn new(process: Process, processes: HashMap<Pid, Process>) -> ProcessTreeElement {
+        return ProcessTreeElement {
+            uid: process.uid,
+            pid: process.pid(),
+            parent: process.parent().map(|pid| processes.get(&pid)).map(|process| Box::new(ProcessTreeElement::new(process, processes))),
+            name: process.name().to_owned(),
+            memory: process.memory(),
+            cpu_usage: process.cpu_usage(),
+            cmd: process.cmd().join(" ")
+        };
+    }
+}
+
 fn main() {
     let mut builder = env_logger::from_env(Env::default().default_filter_or("info"));
     if env::var("RUST_LOG_NO_FORMAT") == Ok("true".to_owned()) {
