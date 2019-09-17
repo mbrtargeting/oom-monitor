@@ -29,27 +29,27 @@ struct SystemState {
 
 impl SystemState {
     fn new(maybe_system: Option<&sysinfo::System>) -> SystemState {
-        fn newState(system: &sysinfo::System) -> SystemState {
-            return SystemState {
+        fn new_state(system: &sysinfo::System) -> SystemState {
+            SystemState {
                 timestamp: Utc::now(),
                 total_memory: system.get_total_memory(),
                 used_memory: system.get_used_memory(),
                 total_swap: system.get_total_swap(),
                 used_swap: system.get_used_swap(),
                 processes: system.get_process_list().to_owned(),
-            };
+            }
         }
         match maybe_system {
             None => {
                 let system = sysinfo::System::new_with_specifics(
                     RefreshKind::new().with_system().with_processes(),
                 );
-                return newState(&system);
+                new_state(&system)
             }
             Some(system) => {
-                return newState(system);
+                new_state(system)
             }
-        };
+        }
     }
 }
 
@@ -66,7 +66,7 @@ struct OomData {
 fn main() {
     let mut builder = env_logger::from_env(Env::default().default_filter_or("info"));
     if env::var("RUST_LOG_NO_FORMAT") == Ok("true".to_owned()) {
-        &builder.format(|buf, record| writeln!(buf, "{}: {}", record.level(), record.args()));
+        builder.format(|buf, record| writeln!(buf, "{}: {}", record.level(), record.args()));
     }
     builder.init();
 
@@ -93,7 +93,7 @@ fn main() {
 
     let mut oom_data = OomData {
         snapshots: VecDeque::new(),
-        already_seen_ooms: already_seen_ooms,
+        already_seen_ooms,
     };
 
     let mut system = sysinfo::System::new();
@@ -101,7 +101,7 @@ fn main() {
 
     loop {
         // sysinfo::System leaks memory, but is expensive to instantiate
-        countdown_to_system_reinstantiation = countdown_to_system_reinstantiation - 1;
+        countdown_to_system_reinstantiation -= 1;
         if countdown_to_system_reinstantiation == 0 {
             countdown_to_system_reinstantiation = 100;
             system = sysinfo::System::new();
@@ -131,10 +131,10 @@ fn handle_ooms(oom_data: OomData, system: &sysinfo::System) -> OomData {
             } else {
                 error!("Problems with dmesg: {}", e);
             }
-            return OomData {
-                snapshots: snapshots,
+            OomData {
+                snapshots,
                 already_seen_ooms: oom_data.already_seen_ooms,
-            };
+            }
         }
         Ok(kill_lines) => {
             let mut now_seen_ooms = HashMap::new();
@@ -196,10 +196,10 @@ fn handle_ooms(oom_data: OomData, system: &sysinfo::System) -> OomData {
                     }
                 }
             }
-            return OomData {
-                snapshots: snapshots,
+            OomData {
+                snapshots,
                 already_seen_ooms: now_seen_ooms,
-            };
+            }
         }
     }
 }
@@ -242,20 +242,20 @@ fn handle_max_mem_statistics(max_mem_data: MaxMemData, system: &sysinfo::System)
             have_recently_printed_max_mem_usage: false,
         };
     }
-    return MaxMemData {
+    MaxMemData {
         max_mem_snapshot: systemstate_with_highest_mem_usage(
             max_mem_data.max_mem_snapshot,
             current_snapshot,
         ),
         have_recently_printed_max_mem_usage: max_mem_data.have_recently_printed_max_mem_usage,
-    };
+    }
 }
 
 fn systemstate_with_highest_mem_usage(a: SystemState, b: SystemState) -> SystemState {
     if a.used_memory > b.used_memory {
-        return a;
+        a
     } else {
-        return b;
+        b
     }
 }
 
@@ -268,7 +268,7 @@ fn extract_pid_from_kill_line(line: &str) -> Result<i32, String> {
                 line
             )),
             Some(cap) => match cap.get(1) {
-                None => Err(format!("Could not match PID.")),
+                None => Err("Could not match PID.".to_string()),
                 Some(pidstring) => match pidstring.as_str().parse::<i32>() {
                     Err(e) => Err(format!("Process ID could not be mapped to int: {}", e)),
                     Ok(pid) => Ok(pid),
@@ -290,7 +290,7 @@ fn get_snapshot_with_killed_process(
     None
 }
 
-fn to_utf8_or_raw(presumably_unicode: &Vec<u8>) -> String {
+fn to_utf8_or_raw(presumably_unicode: &[u8]) -> String {
     match str::from_utf8(presumably_unicode) {
         Err(_e) => format!("Could not deserialize to unicode: {:?}", presumably_unicode),
         Ok(unicode) => unicode.to_string(),
@@ -360,8 +360,8 @@ fn process_to_long_string(process: &Process, snapshot: &SystemState) -> String {
 
 fn stringlist_to_string(list: &[String]) -> String {
     let mut accumulator = "[".to_owned() + list.first().unwrap_or(&"".to_owned());
-    for i in 1..list.len() {
-        accumulator = accumulator + ", " + &list[i];
+    for elem in list {
+        accumulator = accumulator + ", " + &elem;
     }
     accumulator + "]"
 }
