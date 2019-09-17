@@ -29,29 +29,25 @@ struct SystemState {
 
 impl SystemState {
     fn new(maybe_system: Option<&sysinfo::System>) -> SystemState {
+        fn newState(system: &sysinfo::System) -> SystemState {
+            return SystemState {
+                timestamp: Utc::now(),
+                total_memory: system.get_total_memory(),
+                used_memory: system.get_used_memory(),
+                total_swap: system.get_total_swap(),
+                used_swap: system.get_used_swap(),
+                processes: system.get_process_list().to_owned(),
+            };
+        }
         match maybe_system {
             None => {
                 let system = sysinfo::System::new_with_specifics(
                     RefreshKind::new().with_system().with_processes(),
                 );
-                return SystemState {
-                    timestamp: Utc::now(),
-                    total_memory: system.get_total_memory(),
-                    used_memory: system.get_used_memory(),
-                    total_swap: system.get_total_swap(),
-                    used_swap: system.get_used_swap(),
-                    processes: system.get_process_list().to_owned(),
-                };
+                return newState(&system);
             }
             Some(system) => {
-                return SystemState {
-                    timestamp: Utc::now(),
-                    total_memory: system.get_total_memory(),
-                    used_memory: system.get_used_memory(),
-                    total_swap: system.get_total_swap(),
-                    used_swap: system.get_used_swap(),
-                    processes: system.get_process_list().to_owned(),
-                };
+                return newState(system);
             }
         };
     }
