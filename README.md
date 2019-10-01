@@ -1,8 +1,13 @@
 # oom-monitor
 
-Helps diagnose OOM problems by providing a snapshot of system activity right before the OOM kill happened.
+Helps you squeeze more performance out of your cluster and diagnose memory problems.
 
-It achieves this by having a buffer of recorded system states updated periodically, and by polling dmesg. Whenever the Linux kernel records an OOM kill, the oom-monitor logs out the most recent system state snapshot it has where the killed process was still running.
+Two main features:
+
+- If you've over-provisioned, it helps diagnose OOM problems by providing a snapshot of system activity right before the OOM kill happened.
+- If you've under-provisioned, it helps you tell how much more you can give by providing a snapshot of system activity at the time of daily peak memory usage.
+
+It achieves this by having a buffer of recorded system states updated periodically, and by polling dmesg. Whenever the Linux kernel records an OOM kill, the oom-monitor logs out the most recent system state snapshot it has where the killed process was still running. It also stores a snapshot of the system state at peak daily memory usage, which is printed and reset to zero at midnight.
 
 ## How To Test
 
@@ -37,6 +42,6 @@ sudo echo "1" > /proc/sys/kernel/sysrq && sudo echo f > /proc/sysrq-trigger && d
 
 Only support creating deb packages for now, although the raw binary should work on all (amd64?) Linux systems. If you want to just build a raw binary, you can do so using `cargo build --release`.
 
-The `debianize` script requires `fpm`. Install by following the instructions here: <https://fpm.readthedocs.io/en/latest/installing.html>
+The `debianize` scripts require `fpm`. Install by following the instructions here: <https://fpm.readthedocs.io/en/latest/installing.html>
 
-Then run `./debianize` while in the root folder of the project.
+Then run `./debianize-gnu` or `./debianize-musl` while in the root folder of the project, depending on which clib you want to use.
