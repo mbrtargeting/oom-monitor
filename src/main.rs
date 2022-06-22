@@ -64,7 +64,7 @@ struct OomData {
 }
 
 fn main() {
-    let mut builder = env_logger::from_env(Env::default().default_filter_or("info"));
+    let mut builder = env_logger::Builder::from_env(Env::default().default_filter_or("info"));
     if env::var("RUST_LOG_NO_FORMAT") == Ok("true".to_owned()) {
         builder.format(|buf, record| writeln!(buf, "{}: {}", record.level(), record.args()));
     }
